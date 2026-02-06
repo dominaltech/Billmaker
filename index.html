@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Quotation Generator - Dominal Technologies</title>
+  <title>Quotation Generator - Dominal Technology</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@master/qrcode.min.js"></script>
@@ -441,10 +441,6 @@
 </div>
 
 <script>
-// ────────────────────────────────────────
-// Your existing JavaScript (only minor changes for data-label)
-// ────────────────────────────────────────
-
   const { jsPDF } = window.jspdf;
   let extraRowCounter = 0;
 
@@ -564,45 +560,116 @@
     formatDate();
   }
 
+  // ────────────────────────────────────────────────
+  // FIXED: Force desktop layout during capture on ALL devices
+  // ────────────────────────────────────────────────
   async function downloadPDF() {
     updatePreview();
 
     const element = document.getElementById('invoice');
-    const canvas = await html2canvas(element, {
-      scale: 2.2,
-      useCORS: true,
-      logging: false,
-      windowWidth: element.scrollWidth,
-      windowHeight: element.scrollHeight
-    });
 
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
+    // ── Store original values ───────────────────────────────────────
+    const originalStyles = {
+      width: element.style.width,
+      maxWidth: element.style.maxWidth,
+      minWidth: element.style.minWidth,
+      padding: element.style.padding,
+      margin: element.style.margin,
+      boxShadow: element.style.boxShadow,
+      border: element.style.border
+    };
 
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgProps = pdf.getImageProperties(imgData);
-    const imgHeightScaled = (imgProps.height * pdfWidth) / imgProps.width;
+    // Force wide desktop layout (≈ A4 width in pixels at ~96 dpi)
+    // This overrides mobile stacking → table stays in columns
+    element.style.width      = '780px';          // safe wide value (fits most content)
+    element.style.maxWidth   = '780px';
+    element.style.minWidth   = '780px';
+    element.style.padding    = '40px 50px';      // generous margins for print look
+    element.style.margin     = '0 auto';
+    element.style.boxShadow  = 'none';
+    element.style.border     = 'none';
 
-    let heightLeft = imgHeightScaled;
-    let position = 0;
+    // Temporarily disable mobile table stacking (very important!)
+    const styleSheet = document.createElement('style');
+    styleSheet.id = 'pdf-capture-override';
+    styleSheet.textContent = `
+      @media (max-width: 640px) {
+        table, thead, tbody, th, td, tr { display: table !important; }
+        td { padding-left: 10px !important; text-align: left !important; }
+        td:before { display: none !important; }
+        .header { flex-direction: row !important; justify-content: space-between !important; }
+        .signatures { flex-direction: row !important; justify-content: space-between !important; }
+      }
+    `;
+    document.head.appendChild(styleSheet);
 
-    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeightScaled);
-    heightLeft -= pdfHeight;
+    // Give layout time to reflow (critical on mobile)
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-    while (heightLeft >= 0) {
-      position = heightLeft - imgHeightScaled;
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeightScaled);
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2.5,                     // good quality vs performance
+        useCORS: true,
+        logging: false,
+        windowWidth: 780,               // match forced width
+        windowHeight: element.scrollHeight + 80,
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();   // 210 mm
+      const pdfHeight = pdf.internal.pageSize.getHeight(); // 297 mm
+
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
+      // Scale to fit width, preserve ratio
+      const ratio = pdfWidth / (imgWidth / 2.83465);   // ≈96 dpi to mm conversion factor
+      const finalWidth = pdfWidth;
+      const finalHeight = (imgHeight / imgWidth) * finalWidth;
+
+      let heightLeft = finalHeight;
+      let positionY = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, positionY, finalWidth, finalHeight);
       heightLeft -= pdfHeight;
-    }
 
-    const client = document.getElementById('clientName').value.trim() || 'Client';
-    pdf.save(`Quotation_${client.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
+      // Add extra pages if needed (rare if content isn't huge)
+      while (heightLeft > 0) {
+        pdf.addPage();
+        positionY = -pdfHeight;
+        pdf.addImage(imgData, 'PNG', 0, positionY, finalWidth, finalHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      const client = document.getElementById('clientName').value.trim() || 'Client';
+      pdf.save(`Quotation_${client.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert("PDF generation failed. Try again or use a computer.");
+    } finally {
+      // ── Restore everything ───────────────────────────────────────
+      element.style.width      = originalStyles.width      || '';
+      element.style.maxWidth   = originalStyles.maxWidth   || '';
+      element.style.minWidth   = originalStyles.minWidth   || '';
+      element.style.padding    = originalStyles.padding    || '';
+      element.style.margin     = originalStyles.margin     || '';
+      element.style.boxShadow  = originalStyles.boxShadow  || '';
+      element.style.border     = originalStyles.border     || '';
+
+      const overrideStyle = document.getElementById('pdf-capture-override');
+      if (overrideStyle) overrideStyle.remove();
+    }
   }
 
   window.onload = updatePreview;
