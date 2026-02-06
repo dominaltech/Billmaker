@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Quotation Generator - Dominal Technologies</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@master/qrcode.min.js"></script>
+  <style>
+    :root {
+      --primary: #e65100;
+      --primary-dark: #ef6c00;
+      --light: #fff8e1;
+      --border: #ffe082;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      margin: 0;
+      padding: 12px;
+      background: #f8f8f8;
+      color: #111;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border: 1px solid #ddd;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      border-radius: 8px;
+    }
+
+    .form-container {
+      background: var(--light);
+      padding: 16px;
+      margin-bottom: 24px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    h3 {
+      margin-top: 0;
+      color: var(--primary);
+    }
+
+    .form-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .form-row label {
+      font-weight: bold;
+      font-size: 0.95rem;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    textarea {
+      padding: 10px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1rem;
+      width: 100%;
+    }
+
+    textarea {
+      height: 110px;
+      resize: vertical;
+    }
+
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      min-width: 140px;
+      touch-action: manipulation;
+    }
+
+    button:hover {
+      background: var(--primary-dark);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin: 20px 0;
+    }
+
+    .extra-controls {
+      text-align: center;
+      margin: 16px 0;
+    }
+
+    .extra-service-row {
+      background: #fffde7;
+      padding: 12px;
+      margin: 12px 0;
+      border: 1px dashed #fbc02d;
+      border-radius: 6px;
+    }
+
+    .remove-btn {
+      background: #d32f2f;
+      padding: 8px 14px;
+      font-size: 0.9rem;
+    }
+
+    .remove-btn:hover {
+      background: #c62828;
+    }
+
+    /* ────────────────────────────────────────
+       INVOICE / QUOTATION STYLES
+    ──────────────────────────────────────── */
+    .header {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 20px;
+      align-items: flex-start;
+    }
+
+    .company-info h2 {
+      margin: 0;
+      font-size: 1.4rem;
+    }
+
+    .qr-container {
+      width: 100px;
+      height: 100px;
+      align-self: flex-end;
+    }
+
+    .quotation-title {
+      text-align: center;
+      font-size: 1.6rem;
+      font-weight: bold;
+      margin: 12px 0 20px;
+      text-transform: uppercase;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      text-align: left;
+    }
+
+    th {
+      background: #f0f0f0;
+      font-weight: bold;
+    }
+
+    .amount-col {
+      text-align: right;
+    }
+
+    .total-row td {
+      font-weight: bold;
+      background: #f8f8f8;
+    }
+
+    .signatures {
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+      margin-top: 50px;
+      padding-top: 20px;
+      border-top: 1px solid #ccc;
+    }
+
+    .sig-block {
+      text-align: center;
+    }
+
+    .sig-line {
+      border-bottom: 1px solid #000;
+      height: 45px;
+      margin: 12px 0 8px;
+    }
+
+    .note {
+      margin-top: 30px;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      color: #444;
+      border-top: 1px solid #eee;
+      padding-top: 15px;
+    }
+
+    /* ────────────────────────────────────────
+       RESPONSIVE TABLE → STACKED CARDS ON MOBILE
+    ──────────────────────────────────────── */
+    @media (max-width: 640px) {
+      table, thead, tbody, th, td, tr {
+        display: block;
+      }
+
+      thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+      }
+
+      tr {
+        margin-bottom: 1.2rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        background: #fafafa;
+      }
+
+      td {
+        border: none;
+        border-bottom: 1px solid #eee;
+        position: relative;
+        padding-left: 50%;
+        text-align: right;
+      }
+
+      td:before {
+        position: absolute;
+        top: 10px;
+        left: 12px;
+        width: 45%;
+        padding-right: 10px;
+        white-space: nowrap;
+        content: attr(data-label);
+        text-align: left;
+        font-weight: bold;
+        color: #555;
+      }
+
+      td:last-child {
+        border-bottom: none;
+      }
+
+      .amount-col {
+        text-align: right !important;
+      }
+
+      .total-row td {
+        text-align: right !important;
+        padding-left: 0 !important;
+      }
+
+      .total-row td:before {
+        display: none;
+      }
+    }
+
+    @media (min-width: 641px) {
+      .header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+
+      .form-row {
+        flex-direction: row;
+        align-items: center;
+      }
+
+      .form-row label {
+        min-width: 220px;
+        flex-shrink: 0;
+      }
+
+      .signatures {
+        flex-direction: row;
+        justify-content: space-between;
+      }
+
+      .sig-block {
+        width: 48%;
+      }
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 8px;
+      }
+
+      .container {
+        padding: 16px;
+      }
+
+      button {
+        padding: 14px 28px;
+        font-size: 1.05rem;
+      }
+
+      .actions {
+        flex-direction: column;
+      }
+    }
+
+    @media print {
+      body { background: white; padding: 0; margin: 0; }
+      .container { box-shadow: none; border: none; padding: 0; margin: 0; width: 100%; }
+      .form-container, .actions, .extra-controls { display: none !important; }
+      .header { flex-direction: row !important; justify-content: space-between; }
+      table { font-size: 10pt; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="form-container">
+  <h3>Quotation Editor</h3>
+
+  <div class="form-row">
+    <label>Bill To (Client Name):</label>
+    <input type="text" id="clientName" value="" placeholder="Enter client name / company">
+  </div>
+
+  <div class="form-row">
+    <label>Quotation No:</label>
+    <input type="text" id="quotNo" value="QUOT-00001" placeholder="e.g. QUOT-00001">
+  </div>
+
+  <!-- Predefined services -->
+  <div class="form-row">
+    <label>Domain Registration (₹):</label>
+    <input type="number" class="predefined" data-id="domain" value="799" min="0">
+  </div>
+  <div class="form-row">
+    <label>Website Hosting (₹):</label>
+    <input type="number" class="predefined" data-id="hosting" value="2999" min="0">
+  </div>
+  <div class="form-row">
+    <label>Cloud Database Storage (₹):</label>
+    <input type="number" class="predefined" data-id="cloud" value="4999" min="0">
+  </div>
+  <div class="form-row">
+    <label>Website Design & Development (₹):</label>
+    <input type="number" class="predefined" data-id="design" value="24999" min="0">
+  </div>
+  <div class="form-row">
+    <label>Website Maintenance & Support (₹):</label>
+    <input type="number" class="predefined" data-id="maintenance" value="7999" min="0">
+  </div>
+
+  <div id="extraServicesContainer"></div>
+
+  <div class="extra-controls">
+    <button onclick="addExtraServiceRow()">+ Add Another Service</button>
+  </div>
+
+  <div class="form-row">
+    <label>Custom Note (3-5 lines):</label>
+    <textarea id="customNote">Thank you for considering our quotation!\nPrices are valid for 15 days from the date of issue.\nGST will be charged extra as applicable.\nLooking forward to a long-term association.\nFor any clarification, contact us at dominaltech@gmail.com</textarea>
+  </div>
+
+  <div class="actions">
+    <button onclick="updatePreview()">Update Preview</button>
+    <button onclick="downloadPDF()">Download PDF</button>
+  </div>
+</div>
+
+<div class="container" id="invoice">
+  <div class="header">
+    <div class="company-info">
+      <h2>Dominal Technology</h2>
+      <div>+91-8766882442</div>
+      <div>https://dominal.in</div>
+      <div>dominaltech@gmail.com</div>
+      <div>Solapur, Maharashtra, India</div>
+    </div>
+    <div class="qr-container" id="qrcode"></div>
+  </div>
+
+  <div class="quotation-title">QUOTATION</div>
+
+  <table>
+    <tr>
+      <td><strong>Bill To:</strong></td>
+      <td id="billTo"></td>
+      <td><strong>Quotation No:</strong> <span id="quotNoDisplay">QUOT-00001</span></td>
+      <td><strong>Date:</strong> <span id="quotDate"></span></td>
+    </tr>
+  </table>
+
+  <table id="servicesTable">
+    <thead>
+      <tr>
+        <th>Service Description</th>
+        <th>Validity</th>
+        <th>Qty</th>
+        <th class="amount-col">Rate (₹)</th>
+        <th class="amount-col">Amount (₹)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- populated by JS -->
+    </tbody>
+    <tfoot>
+      <tr class="total-row">
+        <td colspan="3"></td>
+        <td class="amount-col">Total Amount</td>
+        <td class="amount-col"><strong>₹ <span id="grandTotal">0</span></strong></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="signatures">
+    <div class="sig-block">
+      <div class="sig-label">Client Signature</div>
+      <div class="sig-line"></div>
+      <div>Date: ____________________</div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-label">Authorized Signatory</div>
+      <div class="sig-line"></div>
+      <div>Date: ____________________</div>
+    </div>
+  </div>
+
+  <div class="note" id="noteArea"></div>
+</div>
+
+<script>
+// ────────────────────────────────────────
+// Your existing JavaScript (only minor changes for data-label)
+// ────────────────────────────────────────
+
+  const { jsPDF } = window.jspdf;
+  let extraRowCounter = 0;
+
+  function formatDate() {
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const yyyy = today.getFullYear();
+    document.getElementById('quotDate').textContent = `${dd}/${mm}/${yyyy}`;
+  }
+
+  function addExtraServiceRow() {
+    extraRowCounter++;
+    const container = document.getElementById('extraServicesContainer');
+    const row = document.createElement('div');
+    row.className = 'extra-service-row';
+    row.id = `extra-row-${extraRowCounter}`;
+    row.innerHTML = `
+      <div class="form-row">
+        <label>Service Name:</label>
+        <input type="text" class="extra-name" placeholder="e.g. SEO Optimization" value="">
+      </div>
+      <div class="form-row">
+        <label>Validity:</label>
+        <input type="text" class="extra-validity" value="1 Year" placeholder="e.g. 1 Year / One-time">
+      </div>
+      <div class="form-row">
+        <label>Quantity:</label>
+        <input type="number" class="extra-qty" value="1" min="1">
+      </div>
+      <div class="form-row">
+        <label>Rate (₹):</label>
+        <input type="number" class="extra-rate" value="0" min="0">
+      </div>
+      <div style="text-align:right; margin-top:8px;">
+        <button class="remove-btn" onclick="removeExtraRow('extra-row-${extraRowCounter}')">Remove</button>
+      </div>
+    `;
+    container.appendChild(row);
+  }
+
+  function removeExtraRow(rowId) {
+    document.getElementById(rowId)?.remove();
+  }
+
+  function updatePreview() {
+    document.getElementById('billTo').textContent = document.getElementById('clientName').value.trim() || "Client Name";
+    document.getElementById('quotNoDisplay').textContent = document.getElementById('quotNo').value.trim() || "QUOT-00001";
+
+    const tbody = document.querySelector('#servicesTable tbody');
+    tbody.innerHTML = '';
+
+    let total = 0;
+
+    const predefined = [
+      { id: 'domain',      name: 'Domain Registration',       validity: '1 Year',  rate:  799, label: 'Domain Registration' },
+      { id: 'hosting',     name: 'Website Hosting',           validity: '1 Year',  rate: 2999, label: 'Website Hosting' },
+      { id: 'cloud',       name: 'Cloud Database Storage',    validity: '1 Year',  rate: 4999, label: 'Cloud Database Storage' },
+      { id: 'design',      name: 'Website Design & Development', validity: 'One-time', rate: 24999, label: 'Website Design & Development' },
+      { id: 'maintenance', name: 'Website Maintenance & Support', validity: '1 Year',  rate: 7999, label: 'Website Maintenance & Support' }
+    ];
+
+    predefined.forEach(item => {
+      const input = document.querySelector(`.predefined[data-id="${item.id}"]`);
+      const amt = Number(input?.value) || 0;
+      if (amt > 0) {
+        total += amt;
+        tbody.innerHTML += `
+          <tr>
+            <td data-label="${item.label}">${item.name}</td>
+            <td data-label="Validity">${item.validity}</td>
+            <td data-label="Qty">1</td>
+            <td class="amount-col" data-label="Rate (₹)">₹ ${item.rate.toLocaleString('en-IN')}</td>
+            <td class="amount-col" data-label="Amount (₹)">₹ ${amt.toLocaleString('en-IN')}</td>
+          </tr>
+        `;
+      }
+    });
+
+    document.querySelectorAll('.extra-service-row').forEach(row => {
+      const name     = row.querySelector('.extra-name')?.value.trim()     || '';
+      const validity = row.querySelector('.extra-validity')?.value.trim() || '1 Year';
+      const qty      = Number(row.querySelector('.extra-qty')?.value)     || 1;
+      const rate     = Number(row.querySelector('.extra-rate')?.value)    || 0;
+      const amt      = qty * rate;
+
+      if (name && amt > 0) {
+        total += amt;
+        tbody.innerHTML += `
+          <tr>
+            <td data-label="Service">${name}</td>
+            <td data-label="Validity">${validity}</td>
+            <td data-label="Qty">${qty}</td>
+            <td class="amount-col" data-label="Rate (₹)">₹ ${rate.toLocaleString('en-IN')}</td>
+            <td class="amount-col" data-label="Amount (₹)">₹ ${amt.toLocaleString('en-IN')}</td>
+          </tr>
+        `;
+      }
+    });
+
+    document.getElementById('grandTotal').textContent = total.toLocaleString('en-IN');
+
+    const noteText = document.getElementById('customNote').value.trim();
+    document.getElementById('noteArea').innerHTML = noteText ? noteText.replace(/\n/g, '<br>') : '';
+
+    const qrDiv = document.getElementById('qrcode');
+    qrDiv.innerHTML = "";
+    new QRCode(qrDiv, {
+      text: "https://dominal.in",
+      width: 100,
+      height: 100,
+      colorDark: "#000000",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.H
+    });
+
+    formatDate();
+  }
+
+  async function downloadPDF() {
+    updatePreview();
+
+    const element = document.getElementById('invoice');
+    const canvas = await html2canvas(element, {
+      scale: 2.2,
+      useCORS: true,
+      logging: false,
+      windowWidth: element.scrollWidth,
+      windowHeight: element.scrollHeight
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgProps = pdf.getImageProperties(imgData);
+    const imgHeightScaled = (imgProps.height * pdfWidth) / imgProps.width;
+
+    let heightLeft = imgHeightScaled;
+    let position = 0;
+
+    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeightScaled);
+    heightLeft -= pdfHeight;
+
+    while (heightLeft >= 0) {
+      position = heightLeft - imgHeightScaled;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeightScaled);
+      heightLeft -= pdfHeight;
+    }
+
+    const client = document.getElementById('clientName').value.trim() || 'Client';
+    pdf.save(`Quotation_${client.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
+  }
+
+  window.onload = updatePreview;
+</script>
+
+</body>
+</html>
