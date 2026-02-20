@@ -19,6 +19,7 @@ input[type="text"],input[type="number"],textarea{width:100%;padding:8px;border:1
 input[type="number"]{max-width:120px}
 button{padding:10px 16px;margin:5px;border:none;border-radius:4px;cursor:pointer;font-weight:600}
 button:hover{opacity:0.9}
+.fa-solid{font-size: 0.8rem;}
 #addServiceBtn{background:#36a420;color:#fff}
 #updatePreviewBtn{background:#0073e6;color:#fff}
 #downloadBtn{background:#e67300;color:#fff}
@@ -222,31 +223,122 @@ tbody.appendChild(tr);
 document.getElementById("grandTotal").innerText=total.toLocaleString("en-IN");
 }
 
+function updatePreview(){
+  // Temporarily hide mobile-unfriendly elements and ensure full render on mobile
+  const isMobile = window.innerWidth <= 768;
+  if (isMobile) {
+    document.querySelectorAll('.service-row').forEach(row => {
+      row.style.flexDirection = 'row'; // Force desktop-like layout for capture
+      row.style.flexWrap = 'nowrap';
+    });
+  }
+  
+  const clientName = document.getElementById("clientName").value.trim();
+  const qNum = document.getElementById("quotationNumber").value.trim();
+  const note = document.getElementById("customNote").value.trim();
+  document.getElementById("billToName").innerText = clientName || "-";
+  document.getElementById("qNumber").innerText = qNum;
+  document.getElementById("qDate").innerText = new Date().toLocaleDateString("en-IN");
+  document.getElementById("noteText").innerText = note || "";
+
+  const tbody = document.querySelector("#serviceTable tbody");
+  tbody.innerHTML = "";
+  let total = 0;
+  document.querySelectorAll(".service-row").forEach(row => {
+    const name = row.querySelector(".serviceName").value.trim();
+    const val = row.querySelector(".validity").value.trim();
+    const qty = parseFloat(row.querySelector(".quantity").value) || 0;
+    const rate = parseFloat(row.querySelector(".rate").value) || 0;
+    if (name !== "" && qty > 0 && rate > 0) {
+      const amount = qty * rate;
+      total += amount;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${name}</td>
+        <td>${val}</td>
+        <td>${qty}</td>
+        <td>${amount.toLocaleString("en-IN")}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  });
+  document.getElementById("grandTotal").innerText = total.toLocaleString("en-IN");
+
+  // Restore mobile layout after brief delay for render
+  if (isMobile) {
+    setTimeout(() => {
+      document.querySelectorAll('.service-row').forEach(row => {
+        row.style.flexDirection = '';
+        row.style.flexWrap = '';
+      });
+    }, 100);
+  }
+}
+
 async function downloadPDF(){
-updatePreview();
-const {jsPDF}=window.jspdf;
-const preview=document.getElementById("quotationPreview");
-const canvas=await html2canvas(preview,{scale:2,scrollY:-window.scrollY});
-const imgData=canvas.toDataURL("image/png");
-const pdf=new jsPDF("p","pt","a4");
-const pageWidth=pdf.internal.pageSize.getWidth();
-const pageHeight=pdf.internal.pageSize.getHeight();
-const imgWidth=pageWidth;
-const imgHeight=canvas.height*imgWidth/canvas.width;
-let heightLeft=imgHeight;
-let position=0;
-pdf.addImage(imgData,"PNG",0,position,imgWidth,imgHeight);
-heightLeft-=pageHeight;
-while(heightLeft>0){
-position-=pageHeight;
-pdf.addPage();
-pdf.addImage(imgData,"PNG",0,position,imgWidth,imgHeight);
-heightLeft-=pageHeight;
+  updatePreview();
+  
+  // Clone preview for clean capture without interference
+  const preview = document.getElementById("quotationPreview");
+  const clone = preview.cloneNode(true);
+  clone.style.position = 'absolute';
+  clone.style.left = '-9999px';
+  clone.style.top = '0';
+  clone.style.width = '800px'; // Fixed width for consistent PDF
+  clone.style.background = 'white';
+  document.body.appendChild(clone);
+  
+  // Mobile viewport fix: temporarily set fixed width
+  const originalViewport = document.querySelector('meta[name="viewport"]');
+  const originalContent = originalViewport.getAttribute('content');
+  if (window.innerWidth <= 768) {
+    originalViewport.setAttribute('content', 'width=800');
+  }
+  
+  // Enhanced html2canvas options for mobile compatibility
+  const canvas = await html2canvas(clone, {
+    scale: 2,
+    useCORS: true,
+    allowTaint: true,
+    scrollX: 0,
+    scrollY: 0,
+    width: 800,
+    height: clone.scrollHeight,
+    windowWidth: 800,
+    windowHeight: clone.scrollHeight,
+    backgroundColor: '#ffffff'
+  });
+  
+  // Cleanup
+  document.body.removeChild(clone);
+  if (window.innerWidth <= 768) {
+    originalViewport.setAttribute('content', originalContent);
+  }
+  
+  const { jsPDF } = window.jspdf;
+  const imgData = canvas.toDataURL("image/png", 1.0);
+  const pdf = new jsPDF("p", "pt", "a4");
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const imgWidth = pageWidth;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  let heightLeft = imgHeight;
+  let position = 0;
+
+  pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+  heightLeft -= pageHeight;
+  while (heightLeft > 0) {
+    position -= pageHeight;
+    pdf.addPage();
+    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+  }
+
+  const clientName = document.getElementById("clientName").value.trim().replace(/\s+/g, "_") || "Client";
+  const dateStr = new Date().toLocaleDateString("en-IN").replace(/\//g, "-");
+  pdf.save(`Quotation_${clientName}_${dateStr}.pdf`);
 }
-const clientName=document.getElementById("clientName").value.trim().replace(/\s+/g,"_")||"Client";
-const dateStr=new Date().toLocaleDateString("en-IN").replace(/\//g,"-");
-pdf.save(`Quotation_${clientName}_${dateStr}.pdf`);
-}
+
 </script>
 </body>
 </html>
